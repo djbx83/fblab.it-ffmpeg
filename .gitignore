@@ -1,0 +1,8 @@
+ffbuilds/
+out/
+enc/
+dist/
+debs/
+win/
+repo/
+*.tar.enc

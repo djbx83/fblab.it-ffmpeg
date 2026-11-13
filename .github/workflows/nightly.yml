@@ -1,0 +1,304 @@
+name: ffmpeg-nightly
+
+on:
+  schedule:
+    # Orario volutamente "non tondo" (richiesta esplicita di FFmpeg-Builds
+    # per non sovraccaricare le infrastrutture upstream dei download)
+    - cron: '37 2 * * *'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Pubblica sullo spazio web'
+        type: boolean
+        default: true
+
+# Nessun trigger su push/pull_request: i secrets non devono mai essere
+# esposti a workflow avviati da fork.
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ffmpeg-nightly
+  cancel-in-progress: false
+
+env:
+  FFBUILDS_REPO: https://github.com/BtbN/FFmpeg-Builds.git
+  FFBUILDS_REF: ${{ vars.FFBUILDS_REF || 'master' }}
+  VARIANT: nonfree
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Immagine base comune + cache dei sorgenti delle dipendenze
+  # ---------------------------------------------------------------------------
+  base:
+    name: Base image + download cache
+    runs-on: ubuntu-latest
+    outputs:
+      ffbuilds_sha: ${{ steps.src.outputs.sha }}
+      registry: ${{ steps.names.outputs.registry }}
+      dl_cache_key: ${{ steps.dl.outputs.key }}
+      build_date: ${{ steps.names.outputs.build_date }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Checkout FFmpeg-Builds
+        id: src
+        run: |
+          git clone --filter=blob:none "$FFBUILDS_REPO" ffbuilds
+          git -C ffbuilds checkout "$FFBUILDS_REF"
+          echo "sha=$(git -C ffbuilds rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Names
+        id: names
+        run: |
+          echo "registry=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "build_date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Free disk space
+        run: ./ffbuilds/util/free_disk_space.sh
+
+      - name: Setup buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          buildkitd-config: ffbuilds/.github/buildkit.toml
+
+      - name: Login GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build base image
+        uses: docker/build-push-action@v7
+        env:
+          SOURCE_DATE_EPOCH: 0
+        with:
+          context: ffbuilds/images/base
+          pull: true
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.names.outputs.registry }}/base:latest
+          cache-from: type=registry,ref=${{ steps.names.outputs.registry }}/base:cache
+          cache-to: type=registry,mode=max,ref=${{ steps.names.outputs.registry }}/base:cache
+
+      - name: Download cache key
+        id: dl
+        working-directory: ffbuilds
+        run: echo "key=download-cache-$(./util/get_dl_cache_tag.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: Download cache
+        uses: actions/cache@v6
+        with:
+          path: ffbuilds/.cache/downloads
+          key: ${{ steps.dl.outputs.key }}
+          restore-keys: download-cache-
+
+      - name: Update downloads
+        working-directory: ffbuilds
+        run: |
+          ./download.sh
+          ./util/clean_cache.sh
+
+  # ---------------------------------------------------------------------------
+  # Immagine dipendenze per target + build ffmpeg + packaging
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build ${{ matrix.target }}
+    needs: base
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux64
+            debarch: amd64
+          - target: linuxarm64
+            debarch: arm64
+          - target: win64
+            debarch: ''
+    env:
+      REGISTRY_IMG: ${{ needs.base.outputs.registry }}
+    steps:
+      - name: Check secrets
+        env:
+          ARTIFACT_KEY: ${{ secrets.ARTIFACT_KEY }}
+        run: |
+          [[ -n "$ARTIFACT_KEY" ]] || { echo "::error::Secret ARTIFACT_KEY mancante"; exit 1; }
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Checkout FFmpeg-Builds
+        run: |
+          git clone --filter=blob:none "$FFBUILDS_REPO" ffbuilds
+          git -C ffbuilds checkout "${{ needs.base.outputs.ffbuilds_sha }}"
+
+      - name: Free disk space
+        run: ./ffbuilds/util/free_disk_space.sh
+
+      - name: Setup buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          buildkitd-config: ffbuilds/.github/buildkit.toml
+
+      - name: Login GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build target base image
+        uses: docker/build-push-action@v7
+        env:
+          SOURCE_DATE_EPOCH: 0
+        with:
+          context: ffbuilds/images/base-${{ matrix.target }}
+          pull: true
+          push: true
+          provenance: false
+          sbom: false
+          build-args: |
+            GH_REPO=${{ env.REGISTRY_IMG }}
+          tags: ${{ env.REGISTRY_IMG }}/base-${{ matrix.target }}:latest
+          cache-from: type=registry,ref=${{ env.REGISTRY_IMG }}/base-${{ matrix.target }}:cache
+          cache-to: type=registry,mode=max,ref=${{ env.REGISTRY_IMG }}/base-${{ matrix.target }}:cache
+
+      - name: Restore download cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ffbuilds/.cache/downloads
+          key: ${{ needs.base.outputs.dl_cache_key }}
+          fail-on-cache-miss: true
+
+      - name: Generate Dockerfile
+        working-directory: ffbuilds
+        run: ./generate.sh ${{ matrix.target }} "$VARIANT"
+
+      - name: Build dependencies image
+        uses: docker/build-push-action@v7
+        env:
+          SOURCE_DATE_EPOCH: 0
+        with:
+          context: ffbuilds
+          pull: true
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ env.REGISTRY_IMG }}/${{ matrix.target }}-${{ env.VARIANT }}:latest
+          cache-from: type=registry,ref=${{ env.REGISTRY_IMG }}/${{ matrix.target }}-${{ env.VARIANT }}:cache
+          cache-to: type=registry,mode=max,ref=${{ env.REGISTRY_IMG }}/${{ matrix.target }}-${{ env.VARIANT }}:cache
+
+      - name: Build ffmpeg
+        id: build
+        working-directory: ffbuilds
+        run: ./build.sh ${{ matrix.target }} "$VARIANT"
+
+      - name: Package
+        env:
+          BUILD_NAME: ${{ steps.build.outputs.build_name }}
+          BUILD_DATE: ${{ needs.base.outputs.build_date }}
+          MAINTAINER: ${{ vars.DEB_MAINTAINER }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          if [[ "${{ matrix.target }}" == win* ]]; then
+            UP="${BUILD_NAME#ffmpeg-}"; UP="${UP%-${{ matrix.target }}-${VARIANT}}"
+            cp "ffbuilds/artifacts/${BUILD_NAME}.zip" "out/ffmpeg-${BUILD_DATE}-${UP}-win64-nonfree.zip"
+          else
+            bash packaging/build-deb.sh "ffbuilds/artifacts/${BUILD_NAME}.tar.xz" "${{ matrix.debarch }}" out
+          fi
+          ls -la out
+
+      # Repo pubblico: gli artifact sono scaricabili da qualunque utente GitHub
+      # loggato, quindi i binari nonfree viaggiano solo cifrati.
+      - name: Encrypt
+        env:
+          ARTIFACT_KEY: ${{ secrets.ARTIFACT_KEY }}
+        run: |
+          tar -C out -cf - . | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
+            -pass env:ARTIFACT_KEY -out "bin-${{ matrix.target }}.tar.enc"
+
+      - name: Upload encrypted artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: bin-${{ matrix.target }}
+          path: bin-${{ matrix.target }}.tar.enc
+          retention-days: 1
+          compression-level: 0
+
+  # ---------------------------------------------------------------------------
+  # Repo APT firmato + upload SFTP
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish
+    needs: build
+    if: ${{ github.event_name == 'schedule' || inputs.publish }}
+    runs-on: ubuntu-latest
+    environment: publish
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: bin-*
+          merge-multiple: true
+          path: enc
+
+      - name: Decrypt
+        env:
+          ARTIFACT_KEY: ${{ secrets.ARTIFACT_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for f in enc/*.tar.enc; do
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:ARTIFACT_KEY -in "$f" | tar -C dist -xf -
+          done
+          mkdir -p debs win
+          mv dist/*.deb debs/
+          mv dist/*.zip win/
+          ls -la debs win
+
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends apt-utils lftp
+
+      - name: Import GPG key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+      - name: Build APT repository
+        env:
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: bash packaging/build-repo.sh debs repo
+
+      - name: Upload
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          SFTP_KNOWN_HOSTS: ${{ secrets.SFTP_KNOWN_HOSTS }}
+          REMOTE_DIR: ${{ secrets.REMOTE_DIR }}
+        run: bash packaging/upload.sh repo win
+
+      # Nei repo pubblici GitHub disabilita i workflow schedulati dopo 60 giorni
+      # senza attività sul repository: lo riabilitiamo a ogni run.
+      - name: Keepalive
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/nightly.yml/enable" || true
