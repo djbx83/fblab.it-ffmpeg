@@ -16,8 +16,8 @@ Accesso HTTP limitato per IP lato OVH (nessun .htaccess).
 /incoming/                area di upload SFTP, svuotata dal publisher
 ```
 
-Entrambi gli archivi sono firmati con la stessa chiave; la chiave pubblica è in
-`<archivio>/deb/fblab-archive-keyring.gpg`.
+Entrambi gli archivi sono firmati con la stessa chiave; la chiave pubblica, comune
+a tutti, è in `https://packages.fblab.it/fblab-archive-keyring.gpg` (armored: `.asc`).
 
 ## Pubblicare un pacchetto (da qualunque CI o a mano)
 
