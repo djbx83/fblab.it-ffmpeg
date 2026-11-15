@@ -1,5 +1,0 @@
-# packages.fblab.it/non-redistributable — accesso solo autenticato
-AuthType Basic
-AuthName "fblab.it non-redistributable"
-AuthUserFile __HTPASSWD_PATH__
-Require valid-user
