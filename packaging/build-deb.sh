@@ -7,6 +7,7 @@
 #   PKG_NAME    nome pacchetto           (default: ffmpeg-nonfree-static)
 #   MAINTAINER  campo Maintainer         (default: ffmpeg-nightly <noreply@localhost>)
 #   BUILD_DATE  YYYYMMDD per la versione (default: data UTC corrente)
+#   BUILD_RUN   numero di run CI, rende unica la versione di build dello stesso giorno
 set -euo pipefail
 
 ARTIFACT="$1"
@@ -33,7 +34,11 @@ BUILD_NAME="$(basename "$SRC")"     # es. ffmpeg-N-121234-gabcdef1234-linux64-no
 UPSTREAM="${BUILD_NAME#ffmpeg-}"
 UPSTREAM="${UPSTREAM%-linux*}"
 # Versione Debian monotona: data + upstream sanificato (dpkg confronta i numeri numericamente)
-DEB_VERSION="${BUILD_DATE}+${UPSTREAM//-/.}"
+if [[ -n "${BUILD_RUN:-}" ]]; then
+    DEB_VERSION="${BUILD_DATE}.${BUILD_RUN}+${UPSTREAM//-/.}"
+else
+    DEB_VERSION="${BUILD_DATE}+${UPSTREAM//-/.}"
+fi
 
 ROOT="$WORK/pkgroot"
 install -d "$ROOT/DEBIAN" "$ROOT/usr/bin" \

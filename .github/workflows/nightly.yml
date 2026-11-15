@@ -51,7 +51,7 @@ jobs:
           git clone --filter=blob:none "$FFBUILDS_REPO" ffbuilds
           git -C ffbuilds checkout "$FFBUILDS_REF"
           # Librerie aggiuntive (scripts.d di questo repo) sopra quelle di FFmpeg-Builds
-          cp -v scripts.d/*.sh ffbuilds/scripts.d/
+          bash packaging/apply-overlay.sh ffbuilds
           echo "sha=$(git -C ffbuilds rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Names
@@ -135,7 +135,7 @@ jobs:
         run: |
           git clone --filter=blob:none "$FFBUILDS_REPO" ffbuilds
           git -C ffbuilds checkout "${{ needs.base.outputs.ffbuilds_sha }}"
-          cp -v scripts.d/*.sh ffbuilds/scripts.d/
+          bash packaging/apply-overlay.sh ffbuilds
 
       - name: Free disk space
         run: ./ffbuilds/util/free_disk_space.sh
@@ -202,6 +202,7 @@ jobs:
         env:
           BUILD_NAME: ${{ steps.build.outputs.build_name }}
           BUILD_DATE: ${{ needs.base.outputs.build_date }}
+          BUILD_RUN: ${{ github.run_number }}
           MAINTAINER: ${{ vars.DEB_MAINTAINER }}
         run: |
           set -euo pipefail
