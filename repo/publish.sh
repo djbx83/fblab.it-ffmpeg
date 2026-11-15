@@ -43,6 +43,13 @@ trap 'rm -rf -- "$WORK"' EXIT
 NEW="$WORK/new"
 mkdir -p "$NEW"
 
+# Chiave pubblica comune nella root: aggiornata a ogni run
+gpg --batch --yes --export "$GPG_KEY_ID" > "$WORK/$KEYRING_NAME"
+gpg --batch --yes --armor --export "$GPG_KEY_ID" > "$WORK/${KEYRING_NAME%.gpg}.asc"
+[[ -s "$WORK/$KEYRING_NAME" ]] || { echo "::error::chiave $GPG_KEY_ID non presente nel keyring"; exit 1; }
+lf "put -O $R $WORK/$KEYRING_NAME; put -O $R $WORK/${KEYRING_NAME%.gpg}.asc"
+echo "Chiave pubblica aggiornata: $R/$KEYRING_NAME"
+
 # ---------------------------------------------------------------------------
 # 1. Raccolta: staging locale + incoming remoto (solo file "fermi" da N minuti)
 # ---------------------------------------------------------------------------
@@ -108,11 +115,6 @@ for a in $ARCHIVES; do
             mirror -R --no-perms --delete $A/dists $R/$a/deb/dists;"
     lf "$cmds"
 done
-
-# Chiave pubblica comune, nella root
-gpg --batch --yes --export "$GPG_KEY_ID" > "$WORK/$KEYRING_NAME"
-gpg --batch --yes --armor --export "$GPG_KEY_ID" > "$WORK/${KEYRING_NAME%.gpg}.asc"
-lf "put -O $R $WORK/$KEYRING_NAME; put -O $R $WORK/${KEYRING_NAME%.gpg}.asc"
 
 # ---------------------------------------------------------------------------
 # 3. Pacchetti Windows
