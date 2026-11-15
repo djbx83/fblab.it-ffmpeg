@@ -208,14 +208,18 @@ jobs:
           MAINTAINER: ${{ vars.DEB_MAINTAINER }}
         run: |
           set -euo pipefail
-          mkdir -p out
+          # Layout di staging atteso da repo/publish.sh:
+          #   <archive>/deb/<suite>/*.deb   <archive>/win64/<subdir>/*
           if [[ "${{ matrix.target }}" == win* ]]; then
+            D=out/non-redistributable/win64/ffmpeg; mkdir -p "$D"
             UP="${BUILD_NAME#ffmpeg-}"; UP="${UP%-${{ matrix.target }}-${VARIANT}}"
-            cp "ffbuilds/artifacts/${BUILD_NAME}.zip" "out/ffmpeg-${BUILD_DATE}-${UP}-win64-nonfree.zip"
+            cp "ffbuilds/artifacts/${BUILD_NAME}.zip" "$D/ffmpeg-${BUILD_DATE}-${UP}-win64-nonfree.zip"
+            cp "ffbuilds/artifacts/${BUILD_NAME}.zip" "$D/ffmpeg-latest-win64-nonfree.zip"
           else
-            bash packaging/build-deb.sh "ffbuilds/artifacts/${BUILD_NAME}.tar.xz" "${{ matrix.debarch }}" out
+            D=out/non-redistributable/deb/stable; mkdir -p "$D"
+            bash packaging/build-deb.sh "ffbuilds/artifacts/${BUILD_NAME}.tar.xz" "${{ matrix.debarch }}" "$D"
           fi
-          ls -la out
+          find out -type f -exec ls -la {} +
 
       # Repo pubblico: gli artifact sono scaricabili da qualunque utente GitHub
       # loggato, quindi i binari nonfree viaggiano solo cifrati.
@@ -235,70 +239,16 @@ jobs:
           compression-level: 0
 
   # ---------------------------------------------------------------------------
-  # Repo APT firmato + upload SFTP
+  # Pubblicazione su packages.fblab.it (workflow riutilizzabile)
   # ---------------------------------------------------------------------------
   publish:
     name: Publish
     needs: build
     if: ${{ github.event_name == 'schedule' || inputs.publish }}
-    runs-on: ubuntu-latest
-    environment: publish
     permissions:
       contents: read
       actions: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v8
-        with:
-          pattern: bin-*
-          merge-multiple: true
-          path: enc
-
-      - name: Decrypt
-        env:
-          ARTIFACT_KEY: ${{ secrets.ARTIFACT_KEY }}
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          for f in enc/*.tar.enc; do
-            openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:ARTIFACT_KEY -in "$f" | tar -C dist -xf -
-          done
-          mkdir -p debs win
-          mv dist/*.deb debs/
-          mv dist/*.zip win/
-          ls -la debs win
-
-      - name: Install tools
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends apt-utils lftp
-
-      - name: Import GPG key
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-        run: printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --import
-
-      - name: Build APT repository
-        env:
-          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: bash packaging/build-repo.sh debs repo
-
-      - name: Upload
-        env:
-          SFTP_HOST: ${{ secrets.SFTP_HOST }}
-          SFTP_PORT: ${{ secrets.SFTP_PORT }}
-          SFTP_USER: ${{ secrets.SFTP_USER }}
-          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
-          SFTP_KNOWN_HOSTS: ${{ secrets.SFTP_KNOWN_HOSTS }}
-          REMOTE_DIR: ${{ secrets.REMOTE_DIR }}
-        run: bash packaging/upload.sh repo win
-
-      # Nei repo pubblici GitHub disabilita i workflow schedulati dopo 60 giorni
-      # senza attività sul repository: lo riabilitiamo a ogni run.
-      - name: Keepalive
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/nightly.yml/enable" || true
+    uses: ./.github/workflows/publish.yml
+    with:
+      artifact_pattern: bin-*
+    secrets: inherit

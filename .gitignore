@@ -1,8 +1,5 @@
 ffbuilds/
 out/
 enc/
-dist/
-debs/
-win/
-repo/
+staging/
 *.tar.enc
