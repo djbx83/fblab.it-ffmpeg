@@ -10,7 +10,8 @@
 #   REMOTE_DIR/incoming/<archive>/win64/<subdir>/*
 #
 # Layout remoto prodotto:
-#   REMOTE_DIR/<archive>/deb/{dists,pool}/…  + fblab-archive-keyring.gpg
+#   REMOTE_DIR/fblab-archive-keyring.gpg (.asc)  chiave pubblica comune a tutti gli archivi
+#   REMOTE_DIR/<archive>/deb/{dists,pool}/…
 #   REMOTE_DIR/<archive>/win64/<subdir>/…
 #
 # Variabili: quelle di repo/lib.sh e repo/build-dists.sh, più
@@ -33,6 +34,7 @@ WIN_PRUNE_DIRS="${WIN_PRUNE_DIRS:-ffmpeg}"
 INCOMING_MIN_AGE="${INCOMING_MIN_AGE:-2minutes}"
 KEYRING_NAME="${KEYRING_NAME:-fblab-archive-keyring.gpg}"
 
+: "${GPG_KEY_ID:?GPG_KEY_ID non impostata}"
 sftp_setup
 R="$REMOTE_DIR"
 
@@ -100,11 +102,17 @@ for a in $ARCHIVES; do
         cmds+=" put -O $R/$a/deb/dists/$s $A/dists/$s/Release.gpg;"
         cmds+=" put -O $R/$a/deb/dists/$s $A/dists/$s/InRelease;"
     done
-    cmds+=" put -O $R/$a/deb $A/$KEYRING_NAME;
+    # chiave per-archivio delle versioni precedenti: ora è comune nella root
+    cmds+=" rm -f $R/$a/deb/$KEYRING_NAME;
             mirror -R --no-perms --delete $A/pool $R/$a/deb/pool;
             mirror -R --no-perms --delete $A/dists $R/$a/deb/dists;"
     lf "$cmds"
 done
+
+# Chiave pubblica comune, nella root
+gpg --batch --yes --export "$GPG_KEY_ID" > "$WORK/$KEYRING_NAME"
+gpg --batch --yes --armor --export "$GPG_KEY_ID" > "$WORK/${KEYRING_NAME%.gpg}.asc"
+lf "put -O $R $WORK/$KEYRING_NAME; put -O $R $WORK/${KEYRING_NAME%.gpg}.asc"
 
 # ---------------------------------------------------------------------------
 # 3. Pacchetti Windows

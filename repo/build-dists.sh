@@ -10,7 +10,6 @@
 #   ARCHES           default "amd64 arm64" (i pacchetti Architecture: all
 #                    finiscono automaticamente in tutti gli indici)
 #   COMPONENT        default main
-#   KEYRING_NAME     default fblab-archive-keyring.gpg
 set -euo pipefail
 
 ROOT="$1"
@@ -19,7 +18,6 @@ LABEL="$2"
 : "${GPG_KEY_ID:?GPG_KEY_ID non impostata}"
 ARCHES="${ARCHES:-amd64 arm64}"
 COMPONENT="${COMPONENT:-main}"
-KEYRING_NAME="${KEYRING_NAME:-fblab-archive-keyring.gpg}"
 
 cd "$ROOT"
 rm -rf dists
@@ -61,4 +59,3 @@ for sdir in pool/*/; do
     echo "suite $suite: $(grep -c '^Package:' dists/"$suite"/"$COMPONENT"/binary-*/Packages | paste -sd' ')"
 done
 
-gpg --batch --yes --export "$GPG_KEY_ID" > "$KEYRING_NAME"
