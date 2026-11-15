@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: 'Pubblica sullo spazio web'
+        description: 'Carica i pacchetti in incoming/ di packages.fblab.it'
         type: boolean
         default: true
 
@@ -126,12 +126,6 @@ jobs:
     env:
       REGISTRY_IMG: ${{ needs.base.outputs.registry }}
     steps:
-      - name: Check secrets
-        env:
-          ARTIFACT_KEY: ${{ secrets.ARTIFACT_KEY }}
-        run: |
-          [[ -n "$ARTIFACT_KEY" ]] || { echo "::error::Secret ARTIFACT_KEY mancante"; exit 1; }
-
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -208,47 +202,42 @@ jobs:
           MAINTAINER: ${{ vars.DEB_MAINTAINER }}
         run: |
           set -euo pipefail
-          # Layout di staging atteso da repo/publish.sh:
-          #   <archive>/deb/<suite>/*.deb   <archive>/win64/<subdir>/*
+          # Layout di incoming/ di packages.fblab.it:
+          #   deb/<suite>/<component>/*.deb   windows/<pacchetto>/*
           if [[ "${{ matrix.target }}" == win* ]]; then
-            D=out/non-redistributable/win64/ffmpeg; mkdir -p "$D"
+            D=out/windows/ffmpeg; mkdir -p "$D"
             UP="${BUILD_NAME#ffmpeg-}"; UP="${UP%-${{ matrix.target }}-${VARIANT}}"
             cp "ffbuilds/artifacts/${BUILD_NAME}.zip" "$D/ffmpeg-${BUILD_DATE}-${UP}-win64-nonfree.zip"
             cp "ffbuilds/artifacts/${BUILD_NAME}.zip" "$D/ffmpeg-latest-win64-nonfree.zip"
           else
-            D=out/non-redistributable/deb/stable; mkdir -p "$D"
+            D=out/deb/stable/non-free; mkdir -p "$D"
             bash packaging/build-deb.sh "ffbuilds/artifacts/${BUILD_NAME}.tar.xz" "${{ matrix.debarch }}" "$D"
           fi
           find out -type f -exec ls -la {} +
 
-      # Repo pubblico: gli artifact sono scaricabili da qualunque utente GitHub
-      # loggato, quindi i binari nonfree viaggiano solo cifrati.
-      - name: Encrypt
+      - name: Upload to incoming
+        if: ${{ github.event_name == 'schedule' || inputs.publish }}
         env:
-          ARTIFACT_KEY: ${{ secrets.ARTIFACT_KEY }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          SFTP_KNOWN_HOSTS: ${{ secrets.SFTP_KNOWN_HOSTS }}
+          REMOTE_DIR: ${{ vars.REMOTE_DIR }}
         run: |
-          tar -C out -cf - . | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
-            -pass env:ARTIFACT_KEY -out "bin-${{ matrix.target }}.tar.enc"
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends lftp
+          bash packaging/upload-incoming.sh out
 
-      - name: Upload encrypted artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: bin-${{ matrix.target }}
-          path: bin-${{ matrix.target }}.tar.enc
-          retention-days: 1
-          compression-level: 0
-
-  # ---------------------------------------------------------------------------
-  # Pubblicazione su packages.fblab.it (workflow riutilizzabile)
-  # ---------------------------------------------------------------------------
-  publish:
-    name: Publish
+  # Nei repo pubblici GitHub disabilita i workflow schedulati dopo 60 giorni
+  # senza attività sul repository: lo riabilitiamo a ogni run.
+  keepalive:
+    name: Keepalive
     needs: build
-    if: ${{ github.event_name == 'schedule' || inputs.publish }}
+    if: always()
+    runs-on: ubuntu-latest
     permissions:
-      contents: read
       actions: write
-    uses: ./.github/workflows/publish.yml
-    with:
-      artifact_pattern: bin-*
-    secrets: inherit
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/nightly.yml/enable" || true

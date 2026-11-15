@@ -1,71 +1,28 @@
-# fblab.it packages
+# fblab.it-ffmpeg
 
-Build giornaliera di FFmpeg (git master, variante **nonfree**, statica) e publisher
-generico per `packages.fblab.it`.
+Build giornaliera di FFmpeg (git master, variante **nonfree**, statica) basata su
+[FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds). Produce i pacchetti e li carica
+in `incoming/` di packages.fblab.it; la pubblicazione la fa il repo `fblab.it-packages`.
 
-## Layout di packages.fblab.it
+| Target       | Output in incoming/                                            |
+|--------------|----------------------------------------------------------------|
+| `linux64`    | `deb/stable/non-free/ffmpeg-nonfree-static_<ver>_amd64.deb`     |
+| `linuxarm64` | `deb/stable/non-free/ffmpeg-nonfree-static_<ver>_arm64.deb`     |
+| `win64`      | `windows/ffmpeg/ffmpeg-<data>-<ver>-win64-nonfree.zip` + `ffmpeg-latest-win64-nonfree.zip` |
 
-```
-Accesso HTTP limitato per IP lato OVH (nessun .htaccess).
+> I binari nonfree **non sono ridistribuibili**: il repo è pubblico solo per i minuti
+> Actions illimitati; i binari non vengono mai pubblicati su GitHub.
 
-/free/deb/                archivio APT
-/free/win64/<pkg>/        pacchetti Windows
-/non-redistributable/
-    deb/                  archivio APT (ffmpeg-nonfree-static, suite stable)
-    win64/ffmpeg/         zip datati (ultimi 7) + ffmpeg-latest-win64-nonfree.zip
-/incoming/                area di upload SFTP, svuotata dal publisher
-```
-
-Entrambi gli archivi sono firmati con la stessa chiave; la chiave pubblica, comune
-a tutti, è in `https://packages.fblab.it/fblab-archive-keyring.gpg` (armored: `.asc`).
-
-## Pubblicare un pacchetto (da qualunque CI o a mano)
-
-Caricare via SFTP in:
-
-```
-incoming/<free|non-redistributable>/deb/<suite>/*.deb
-incoming/<free|non-redistributable>/win64/<pkg>/*
-```
-
-La suite viene creata se non esiste. Il workflow `packages-publish` controlla
-`incoming/` ogni ora (o a mano via *Run workflow*), pubblica e svuota `incoming/`.
-Vengono tenute le ultime `KEEP_VERSIONS` (default 3) versioni per suite/pacchetto/arch.
-
-## Workflow
-
-| Workflow | Trigger | Cosa fa |
-|---|---|---|
-| `nightly.yml` | 02:37 UTC, manuale | build ffmpeg linux64/linuxarm64/win64 → `publish.yml` |
-| `publish.yml` | ogni ora, manuale, chiamato | incoming + artifact → archivi APT firmati + win64 |
+Schedulato alle 02:37 UTC; a mano con *Run workflow* (`publish` decide se caricare).
 
 ## Secrets
 
-| Secret | |
-|---|---|
-| `ARTIFACT_KEY` | cifratura artifact tra job |
-| `GPG_PRIVATE_KEY`, `GPG_KEY_ID` | firma archivi (`GPG_PASSPHRASE` solo se la chiave ne ha una) |
-| `SFTP_HOST`, `SFTP_PORT`, `SFTP_USER`, `SFTP_PASSWORD`, `SFTP_KNOWN_HOSTS` | accesso SFTP |
-| `REMOTE_DIR` | document root di packages.fblab.it sull'SFTP (`/home/golivec-packages`) |
+`SFTP_HOST`, `SFTP_PORT`, `SFTP_USER`, `SFTP_PASSWORD`, `SFTP_KNOWN_HOSTS`
 
 ## Variables
 
 | Variable | |
 |---|---|
-| `KEEP_VERSIONS` | versioni da tenere (default 3) |
+| `REMOTE_DIR` | root di packages.fblab.it sull'SFTP (`.`) |
 | `FFBUILDS_REF` | commit/branch FFmpeg-Builds (default master) |
 | `DEB_MAINTAINER` | campo Maintainer dei .deb |
-
-## Client
-
-Nella root ci sono la chiave e un file `.sources` (deb822) per ogni suite esistente:
-`fblab-<archivio>-<suite>.sources`, es. `fblab-non-redistributable-stable.sources`,
-`fblab-free-trixie.sources`. Vengono rigenerati a ogni pubblicazione.
-
-Il front-end OVH blocca lo user-agent di curl: usare `-A`.
-
-```bash
-sudo curl -fsS -A "Mozilla/5.0" -o /usr/share/keyrings/fblab-archive-keyring.gpg https://packages.fblab.it/fblab-archive-keyring.gpg
-sudo curl -fsS -A "Mozilla/5.0" -o /etc/apt/sources.list.d/fblab-non-redistributable-stable.sources https://packages.fblab.it/fblab-non-redistributable-stable.sources
-sudo apt update
-```
