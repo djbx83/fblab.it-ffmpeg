@@ -11,6 +11,7 @@
 #
 # Layout remoto prodotto:
 #   REMOTE_DIR/fblab-archive-keyring.gpg (.asc)  chiave pubblica comune a tutti gli archivi
+#   REMOTE_DIR/fblab-<archive>-<suite>.sources   file sorgente apt pronti (deb822), uno per suite
 #   REMOTE_DIR/<archive>/deb/{dists,pool}/…
 #   REMOTE_DIR/<archive>/win64/<subdir>/…
 #
@@ -20,6 +21,7 @@
 #   WIN_KEEP        file datati da tenere nelle subdir win64 in WIN_PRUNE_DIRS, default 7
 #   WIN_PRUNE_DIRS  default "ffmpeg"
 #   INCOMING_MIN_AGE  età minima dei file in incoming (upload completati), default 2 minuti
+#   PUBLIC_URL      URL pubblico della root, default https://packages.fblab.it
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,6 +35,7 @@ WIN_KEEP="${WIN_KEEP:-7}"
 WIN_PRUNE_DIRS="${WIN_PRUNE_DIRS:-ffmpeg}"
 INCOMING_MIN_AGE="${INCOMING_MIN_AGE:-2minutes}"
 KEYRING_NAME="${KEYRING_NAME:-fblab-archive-keyring.gpg}"
+PUBLIC_URL="${PUBLIC_URL:-https://packages.fblab.it}"
 
 : "${GPG_KEY_ID:?GPG_KEY_ID non impostata}"
 sftp_setup
@@ -49,6 +52,35 @@ gpg --batch --yes --armor --export "$GPG_KEY_ID" > "$WORK/${KEYRING_NAME%.gpg}.a
 [[ -s "$WORK/$KEYRING_NAME" ]] || { echo "::error::chiave $GPG_KEY_ID non presente nel keyring"; exit 1; }
 lf "put -O $R $WORK/$KEYRING_NAME; put -O $R $WORK/${KEYRING_NAME%.gpg}.asc"
 echo "Chiave pubblica aggiornata: $R/$KEYRING_NAME"
+
+# File .sources pronti nella root: uno per (archivio, suite) esistente sul server.
+# Rimuove quelli di suite che non esistono più.
+update_sources() {
+    local sd="$WORK/sources" a s cmds="" f
+    rm -rf "$sd"; mkdir -p "$sd"
+    for a in $ARCHIVES; do
+        while IFS= read -r s; do
+            [[ -n "$s" ]] || continue
+            cat > "$sd/fblab-$a-$s.sources" <<EOS
+Types: deb
+URIs: $PUBLIC_URL/$a/deb
+Suites: $s
+Components: main
+Signed-By: /usr/share/keyrings/$KEYRING_NAME
+EOS
+        done < <(lf_try "cls -1 $R/$a/deb/dists/" | sed -n 's|.*/\([^/][^/]*\)/$|\1|p')
+    done
+    for f in "$sd"/*.sources; do
+        [[ -e "$f" ]] && cmds+=" put -O $R $f;"
+    done
+    while IFS= read -r f; do
+        f="${f##*/}"
+        [[ -n "$f" && ! -e "$sd/$f" ]] && cmds+=" rm $R/$f;" && echo "rimosso $f"
+    done < <(lf_try "cls -1 $R/fblab-*.sources")
+    [[ -n "$cmds" ]] && lf "$cmds"
+    (cd "$sd" && ls -1 ./*.sources 2>/dev/null | sed 's|^\./|sources: |') || true
+}
+update_sources
 
 # ---------------------------------------------------------------------------
 # 1. Raccolta: staging locale + incoming remoto (solo file "fermi" da N minuti)
@@ -150,4 +182,5 @@ for a in $ARCHIVES; do
     [[ -n "$del" ]] && lf "$del"
 done
 
+update_sources
 echo "Pubblicazione completata."

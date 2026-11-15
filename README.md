@@ -58,7 +58,14 @@ Vengono tenute le ultime `KEEP_VERSIONS` (default 3) versioni per suite/pacchett
 
 ## Client
 
-```
-deb [signed-by=/usr/share/keyrings/fblab-archive-keyring.gpg] https://packages.fblab.it/free/deb <suite> main
-deb [signed-by=/usr/share/keyrings/fblab-archive-keyring.gpg] https://packages.fblab.it/non-redistributable/deb stable main
+Nella root ci sono la chiave e un file `.sources` (deb822) per ogni suite esistente:
+`fblab-<archivio>-<suite>.sources`, es. `fblab-non-redistributable-stable.sources`,
+`fblab-free-trixie.sources`. Vengono rigenerati a ogni pubblicazione.
+
+Il front-end OVH blocca lo user-agent di curl: usare `-A`.
+
+```bash
+sudo curl -fsS -A "Mozilla/5.0" -o /usr/share/keyrings/fblab-archive-keyring.gpg https://packages.fblab.it/fblab-archive-keyring.gpg
+sudo curl -fsS -A "Mozilla/5.0" -o /etc/apt/sources.list.d/fblab-non-redistributable-stable.sources https://packages.fblab.it/fblab-non-redistributable-stable.sources
+sudo apt update
 ```
