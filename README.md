@@ -13,6 +13,12 @@ in `incoming/` di packages.fblab.it; la pubblicazione la fa il repo `fblab.it-pa
 > I binari nonfree **non sono ridistribuibili**: il repo è pubblico solo per i minuti
 > Actions illimitati; i binari non vengono mai pubblicati su GitHub.
 
+## Librerie aggiuntive
+
+`scripts.d/` contiene script nel formato di FFmpeg-Builds per librerie che la variante
+nonfree upstream non include; il workflow li copia in `ffbuilds/scripts.d/` prima della
+generazione del Dockerfile. Attualmente: libcodec2, libgsm, libilbc, libshine, libspeex.
+
 Schedulato alle 02:37 UTC; a mano con *Run workflow* (`publish` decide se caricare).
 
 ## Secrets

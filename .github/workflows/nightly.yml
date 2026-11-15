@@ -50,6 +50,8 @@ jobs:
         run: |
           git clone --filter=blob:none "$FFBUILDS_REPO" ffbuilds
           git -C ffbuilds checkout "$FFBUILDS_REF"
+          # Librerie aggiuntive (scripts.d di questo repo) sopra quelle di FFmpeg-Builds
+          cp -v scripts.d/*.sh ffbuilds/scripts.d/
           echo "sha=$(git -C ffbuilds rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Names
@@ -133,6 +135,7 @@ jobs:
         run: |
           git clone --filter=blob:none "$FFBUILDS_REPO" ffbuilds
           git -C ffbuilds checkout "${{ needs.base.outputs.ffbuilds_sha }}"
+          cp -v scripts.d/*.sh ffbuilds/scripts.d/
 
       - name: Free disk space
         run: ./ffbuilds/util/free_disk_space.sh
