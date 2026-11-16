@@ -10,7 +10,8 @@ sudo apt install ffmpeg-nonfree-static
 ```
 
 Lo user-agent esplicito serve perché il front-end OVH blocca quello di curl.
-Windows: `https://packages.fblab.it/windows/ffmpeg/ffmpeg-latest-win64-nonfree.zip`.
+Windows: `https://packages.fblab.it/windows/ffmpeg/ffmpeg-latest-win64-nonfree.zip` (statico)
+oppure `ffmpeg-latest-win64-nonfree-shared.zip` (con DLL, `.lib`/`.dll.a` e header per sviluppo).
 
 Build giornaliera di FFmpeg (git master, variante **nonfree**, statica) basata su
 [FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds). Produce i pacchetti e li carica
@@ -20,7 +21,7 @@ in `incoming/` di packages.fblab.it; la pubblicazione la fa il repo `fblab.it-pa
 |--------------|----------------------------------------------------------------|
 | `linux64`    | `deb/stable/non-free/ffmpeg-nonfree-static_<ver>_amd64.deb`     |
 | `linuxarm64` | `deb/stable/non-free/ffmpeg-nonfree-static_<ver>_arm64.deb`     |
-| `win64`      | `windows/ffmpeg/ffmpeg-<data>-<ver>-win64-nonfree.zip` + `ffmpeg-latest-win64-nonfree.zip` |
+| `win64`      | `windows/ffmpeg/ffmpeg-<data>-<ver>-win64-nonfree.zip` e `-nonfree-shared.zip` (DLL), più i rispettivi `ffmpeg-latest-*` |
 
 > I binari nonfree **non sono ridistribuibili**: il repo è pubblico solo per i minuti
 > Actions illimitati; i binari non vengono mai pubblicati su GitHub.

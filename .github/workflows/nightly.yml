@@ -198,9 +198,22 @@ jobs:
         working-directory: ffbuilds
         run: ./build.sh ${{ matrix.target }} "$VARIANT"
 
+      # Windows: anche la build con le DLL (variante -shared di FFmpeg-Builds).
+      # Il Dockerfile delle dipendenze è identico a quello statico: si riusa
+      # la stessa immagine con il nome che build.sh si aspetta.
+      - name: Build ffmpeg (shared DLL)
+        if: startsWith(matrix.target, 'win')
+        id: build_shared
+        working-directory: ffbuilds
+        run: |
+          docker pull "$REGISTRY_IMG/${{ matrix.target }}-$VARIANT:latest"
+          docker tag "$REGISTRY_IMG/${{ matrix.target }}-$VARIANT:latest" "$REGISTRY_IMG/${{ matrix.target }}-$VARIANT-shared:latest"
+          ./build.sh ${{ matrix.target }} "$VARIANT-shared"
+
       - name: Package
         env:
           BUILD_NAME: ${{ steps.build.outputs.build_name }}
+          BUILD_NAME_SHARED: ${{ steps.build_shared.outputs.build_name }}
           BUILD_DATE: ${{ needs.base.outputs.build_date }}
           BUILD_RUN: ${{ github.run_number }}
           MAINTAINER: ${{ vars.DEB_MAINTAINER }}
@@ -213,6 +226,10 @@ jobs:
             UP="${BUILD_NAME#ffmpeg-}"; UP="${UP%-${{ matrix.target }}-${VARIANT}}"
             cp "ffbuilds/artifacts/${BUILD_NAME}.zip" "$D/ffmpeg-${BUILD_DATE}-${UP}-win64-nonfree.zip"
             cp "ffbuilds/artifacts/${BUILD_NAME}.zip" "$D/ffmpeg-latest-win64-nonfree.zip"
+            # build con DLL: bin/ (exe + dll), lib/ (.lib, .dll.a, .def, pkgconfig), include/
+            UPS="${BUILD_NAME_SHARED#ffmpeg-}"; UPS="${UPS%-${{ matrix.target }}-${VARIANT}-shared}"
+            cp "ffbuilds/artifacts/${BUILD_NAME_SHARED}.zip" "$D/ffmpeg-${BUILD_DATE}-${UPS}-win64-nonfree-shared.zip"
+            cp "ffbuilds/artifacts/${BUILD_NAME_SHARED}.zip" "$D/ffmpeg-latest-win64-nonfree-shared.zip"
           else
             D=out/deb/stable/non-free; mkdir -p "$D"
             bash packaging/build-deb.sh "ffbuilds/artifacts/${BUILD_NAME}.tar.xz" "${{ matrix.debarch }}" "$D"
