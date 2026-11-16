@@ -27,6 +27,14 @@ ffbuild_dockerbuild() {
         -DUNITTEST=OFF -DLPCNET=OFF ..
     make -j$(nproc) codec2
     DESTDIR="$FFBUILD_DESTDIR" cmake --install .
+
+    # codec2 e speex esportano entrambe lpc_to_lsp/lsp_to_lpc: nel link statico
+    # di ffmpeg danno "multiple definition". Rinomina i simboli in codec2
+    # (definizioni e riferimenti interni, in tutti gli oggetti dell'archivio).
+    "${FFBUILD_CROSS_PREFIX}objcopy" \
+        --redefine-sym lpc_to_lsp=codec2_lpc_to_lsp \
+        --redefine-sym lsp_to_lpc=codec2_lsp_to_lpc \
+        "$FFBUILD_DESTPREFIX"/lib/libcodec2.a
 }
 
 ffbuild_configure() {
