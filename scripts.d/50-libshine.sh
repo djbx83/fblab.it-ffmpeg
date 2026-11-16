@@ -8,6 +8,9 @@ ffbuild_enabled() {
 }
 
 ffbuild_dockerbuild() {
+    # Codice pre-C23 (prototipi "f()" senza argomenti): GCC >= 15 compila in C23 di default
+    export CFLAGS="$CFLAGS -std=gnu17"
+
     ./bootstrap
 
     local myconf=(
