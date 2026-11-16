@@ -1,5 +1,7 @@
 # fblab.it-ffmpeg
 
+[![ffmpeg-nightly](https://github.com/djbx83/fblab.it-ffmpeg/actions/workflows/nightly.yml/badge.svg)](https://github.com/djbx83/fblab.it-ffmpeg/actions/workflows/nightly.yml)
+
 ## Installazione sul client (Debian/Ubuntu)
 
 ```bash
@@ -32,7 +34,8 @@ in `incoming/` di packages.fblab.it; la pubblicazione la fa il repo `fblab.it-pa
 nonfree upstream non include; il workflow li copia in `ffbuilds/scripts.d/` prima della
 generazione del Dockerfile. Attualmente: libcodec2, libgsm, libilbc, libshine, libspeex.
 
-Schedulato alle 02:37 UTC; a mano con *Run workflow* (`publish` decide se caricare).
+Schedulato alle 02:37 UTC (tutti i target); a mano con *Run workflow*: `target` sceglie
+un singolo target o `all`, `publish` decide se caricare in incoming/.
 
 ## Secrets
 

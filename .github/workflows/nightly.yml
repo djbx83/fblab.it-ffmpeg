@@ -11,6 +11,15 @@ on:
         description: 'Carica i pacchetti in incoming/ di packages.fblab.it'
         type: boolean
         default: true
+      target:
+        description: 'Target da compilare'
+        type: choice
+        options:
+          - all
+          - linux64
+          - linuxarm64
+          - win64
+        default: all
 
 # Nessun trigger su push/pull_request: i secrets non devono mai essere
 # esposti a workflow avviati da fork.
@@ -41,7 +50,24 @@ jobs:
       registry: ${{ steps.names.outputs.registry }}
       dl_cache_key: ${{ steps.dl.outputs.key }}
       build_date: ${{ steps.names.outputs.build_date }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
+      # Matrice dei target: tutti (schedule / "all") o uno solo (Run workflow)
+      - name: Targets
+        id: matrix
+        env:
+          TARGET: ${{ inputs.target || 'all' }}
+        run: |
+          all='[{"target":"linux64","debarch":"amd64"},{"target":"linuxarm64","debarch":"arm64"},{"target":"win64","debarch":""}]'
+          if [[ "$TARGET" == "all" ]]; then
+            m="$all"
+          else
+            m="$(jq -c --arg t "$TARGET" '[.[] | select(.target == $t)]' <<< "$all")"
+          fi
+          [[ "$m" != "[]" ]] || { echo "::error::target sconosciuto: $TARGET"; exit 1; }
+          echo "matrix={\"include\":$m}" >> "$GITHUB_OUTPUT"
+          echo "Target: $m"
+
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -117,14 +143,7 @@ jobs:
     timeout-minutes: 360
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - target: linux64
-            debarch: amd64
-          - target: linuxarm64
-            debarch: arm64
-          - target: win64
-            debarch: ''
+      matrix: ${{ fromJSON(needs.base.outputs.matrix) }}
     env:
       REGISTRY_IMG: ${{ needs.base.outputs.registry }}
     steps:
