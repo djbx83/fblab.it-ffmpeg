@@ -199,15 +199,20 @@ jobs:
         run: ./build.sh ${{ matrix.target }} "$VARIANT"
 
       # Windows: anche la build con le DLL (variante -shared di FFmpeg-Builds).
-      # Il Dockerfile delle dipendenze è identico a quello statico: si riusa
-      # la stessa immagine con il nome che build.sh si aspetta.
+      # Le dipendenze sono identiche alla statica; cambiano solo le ENV finali
+      # dell'immagine (VARIANT e FF_CONFIGURE con --enable-shared --disable-static),
+      # che build.sh passa a configure. Si deriva quindi un'immagine locale.
       - name: Build ffmpeg (shared DLL)
         if: startsWith(matrix.target, 'win')
         id: build_shared
         working-directory: ffbuilds
         run: |
-          docker pull "$REGISTRY_IMG/${{ matrix.target }}-$VARIANT:latest"
-          docker tag "$REGISTRY_IMG/${{ matrix.target }}-$VARIANT:latest" "$REGISTRY_IMG/${{ matrix.target }}-$VARIANT-shared:latest"
+          BASE="$REGISTRY_IMG/${{ matrix.target }}-$VARIANT:latest"
+          SHARED="$REGISTRY_IMG/${{ matrix.target }}-$VARIANT-shared:latest"
+          docker pull "$BASE"
+          printf 'FROM %s\nENV VARIANT=%s-shared\nENV FF_CONFIGURE="--enable-shared --disable-static ${FF_CONFIGURE}"\n' "$BASE" "$VARIANT" \
+            | docker build -t "$SHARED" -
+          docker image inspect "$SHARED" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^(VARIANT|FF_CONFIGURE)=' | cut -c1-120
           ./build.sh ${{ matrix.target }} "$VARIANT-shared"
 
       - name: Package
