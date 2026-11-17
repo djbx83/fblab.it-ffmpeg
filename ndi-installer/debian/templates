@@ -1,0 +1,12 @@
+Template: ndi-runtime-installer/accept-license
+Type: boolean
+Default: false
+Description: Do you accept the NDI SDK License Agreement?
+ This package downloads the NDI SDK for Linux from ndi.video and installs
+ only its runtime library (libndi.so.6). The SDK is proprietary software
+ by Vizrt NDI AB; its license is available at:
+ .
+   http://ndi.link/ndisdk_license
+ .
+ If you do not accept, nothing is downloaded. You can change your mind later
+ with: dpkg-reconfigure ndi-runtime-installer

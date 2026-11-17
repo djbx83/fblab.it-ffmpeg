@@ -1,0 +1,20 @@
+#!/bin/sh
+set -e
+. /usr/share/debconf/confmodule
+
+if [ "$1" = configure ]; then
+    db_get ndi-runtime-installer/accept-license
+    if [ "$RET" = true ]; then
+        # Un errore di download non deve bloccare apt: si avvisa e si riprova a mano.
+        # stdout su stderr: dopo confmodule lo stdout è il canale di debconf
+        if ! update-ndi-runtime >&2; then
+            echo "ndi-runtime-installer: installazione del runtime NDI fallita." >&2
+            echo "ndi-runtime-installer: riprovare con: sudo update-ndi-runtime" >&2
+        fi
+    else
+        echo "ndi-runtime-installer: licenza NDI non accettata, runtime non installato." >&2
+        echo "ndi-runtime-installer: per accettarla: sudo dpkg-reconfigure ndi-runtime-installer" >&2
+    fi
+fi
+db_stop
+exit 0

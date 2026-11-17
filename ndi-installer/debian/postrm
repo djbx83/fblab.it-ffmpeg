@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+case "$1" in
+    remove|purge)
+        rm -rf /usr/lib/ndi-runtime /usr/lib/ndi-runtime.new /usr/lib/ndi-runtime.old
+        ldconfig
+        ;;
+esac
+if [ "$1" = purge ] && [ -e /usr/share/debconf/confmodule ]; then
+    . /usr/share/debconf/confmodule
+    db_purge
+fi
+exit 0

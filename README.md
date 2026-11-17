@@ -47,6 +47,12 @@ modificati per caricare il runtime a run time); `scripts.d/50-libndi.sh` fornisc
 header dell'SDK NDI 6 (MIT). ffmpeg **non** dipende da libndi: il runtime serve solo quando
 si usa `-f libndi_newtek`, e va installato a parte (NDI Runtime / NDI Tools).
 
+Linux, dal repo: `sudo apt install ndi-runtime-installer`. Il pacchetto (`ndi-installer/`,
+workflow *ndi-runtime-installer*, a mano dopo aver alzato `ndi-installer/VERSION`) non
+contiene binari NDI: chiede via debconf l'accettazione della licenza NDI SDK, scarica
+l'SDK da ndi.video e installa solo `libndi.so.6` in `/usr/lib/ndi-runtime` (ldconfig).
+Aggiornare il runtime: `sudo update-ndi-runtime`. Windows: `winget install --exact --id NDI.NDIRuntime`.
+
 Ricerca del runtime: `$NDI_RUNTIME_DIR_V6` (impostata dall'installer Windows), poi
 `$NDI_RUNTIME_DIR_V5`; Linux `libndi.so.6` → `libndi.so.5` → `libndi.so` (ld.so.cache,
 `LD_LIBRARY_PATH`); Windows `Processing.NDI.Lib.x64.dll` accanto a ffmpeg.exe o in System32.

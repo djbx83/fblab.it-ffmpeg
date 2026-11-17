@@ -1,0 +1,45 @@
+name: ndi-runtime-installer
+
+# Pacchetto "installer" del runtime NDI: il .deb non contiene binari NDI, scarica
+# l'SDK da ndi.video al momento dell'installazione sul client.
+# Si lancia a mano dopo aver modificato ndi-installer/ (alzare ndi-installer/VERSION).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ndi-runtime-installer
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build + upload
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build
+        env:
+          MAINTAINER: ${{ vars.DEB_MAINTAINER }}
+        run: |
+          for arch in amd64 arm64; do
+            bash ndi-installer/build.sh "$arch" out/deb/stable/non-free
+          done
+          for f in out/deb/stable/non-free/*.deb; do
+            dpkg-deb -I "$f" | sed -n '/Package:/,/Depends:/p'
+          done
+
+      - name: Upload to incoming
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          SFTP_KNOWN_HOSTS: ${{ secrets.SFTP_KNOWN_HOSTS }}
+          REMOTE_DIR: ${{ vars.REMOTE_DIR }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends lftp
+          bash packaging/upload-incoming.sh out

@@ -1,0 +1,57 @@
+#!/bin/sh
+# Scarica l'SDK NDI per Linux dal sito NDI e installa la sola libreria runtime
+# (libndi.so.6) in /usr/lib/ndi-runtime. Nessun binario NDI è contenuto nel pacchetto.
+# Uso: update-ndi-runtime            (NDI_SDK_URL per un URL diverso)
+set -eu
+
+URL="${NDI_SDK_URL:-https://downloads.ndi.tv/SDK/NDI_SDK_Linux/Install_NDI_SDK_v6_Linux.tar.gz}"
+DEST=/usr/lib/ndi-runtime
+
+die() { echo "update-ndi-runtime: $*" >&2; exit 1; }
+[ "$(id -u)" = 0 ] || die "va eseguito come root"
+
+case "$(dpkg --print-architecture)" in
+    amd64) SUBDIRS="x86_64-linux-gnu" ;;
+    arm64) SUBDIRS="aarch64-rpi4-linux-gnueabi aarch64-linux-gnu aarch64-newtek-linux-gnu" ;;
+    *) die "architettura $(dpkg --print-architecture) non supportata" ;;
+esac
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT INT TERM
+
+echo "Download $URL"
+curl -fsSL --retry 3 --connect-timeout 20 -o "$TMP/sdk.tar.gz" "$URL" || die "download fallito"
+tar -xzf "$TMP/sdk.tar.gz" -C "$TMP" || die "archivio non valido"
+
+# L'installer è uno script autoestraente: l'archivio vero parte dopo __NDI_ARCHIVE_BEGIN__
+SH="$(find "$TMP" -maxdepth 1 -name 'Install_NDI_SDK_v*_Linux.sh' | head -n 1)"
+[ -n "$SH" ] || die "Install_NDI_SDK_v*_Linux.sh non trovato nell'archivio"
+LINE="$(awk '/^__NDI_ARCHIVE_BEGIN__/ { print NR + 1; exit 0 }' "$SH")"
+[ -n "$LINE" ] || die "marcatore __NDI_ARCHIVE_BEGIN__ non trovato in $(basename "$SH")"
+mkdir "$TMP/x"
+tail -n +"$LINE" "$SH" | tar -xz -C "$TMP/x" || die "estrazione SDK fallita"
+SDK="$TMP/x/NDI SDK for Linux"
+[ -d "$SDK" ] || die "directory 'NDI SDK for Linux' non trovata"
+
+SRC=""
+for d in $SUBDIRS; do
+    if ls "$SDK/lib/$d"/libndi.so.6* >/dev/null 2>&1; then SRC="$SDK/lib/$d"; break; fi
+done
+[ -n "$SRC" ] || die "libndi.so.6 non trovata in lib/{$SUBDIRS}"
+
+rm -rf "$DEST.new"
+mkdir -p "$DEST.new"
+cp -P "$SRC"/libndi.so* "$DEST.new"/
+if [ -f "$SDK/Version.txt" ]; then cp "$SDK/Version.txt" "$DEST.new"/; fi
+for f in "$SDK"/*[Ll]icense*; do
+    if [ -f "$f" ]; then cp "$f" "$DEST.new"/; fi
+done
+
+rm -rf "$DEST.old"
+if [ -d "$DEST" ]; then mv "$DEST" "$DEST.old"; fi
+mv "$DEST.new" "$DEST"
+rm -rf "$DEST.old"
+ldconfig
+
+echo "Runtime NDI installato in $DEST ($(cat "$DEST/Version.txt" 2>/dev/null | head -n 1 || echo versione sconosciuta)):"
+ls -l "$DEST"/libndi.so*

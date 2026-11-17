@@ -76,6 +76,7 @@ Priority: optional
 Provides: ffmpeg
 Conflicts: ffmpeg
 Replaces: ffmpeg
+Suggests: ndi-runtime-installer
 Homepage: https://ffmpeg.org/
 Description: FFmpeg static build (git master, nonfree, all libraries)
  Build statica giornaliera di FFmpeg da git master, variante nonfree
