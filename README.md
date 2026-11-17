@@ -39,6 +39,24 @@ libqrencode, libquirc.
 Schedulato alle 02:37 UTC (tutti i target); a mano con *Run workflow*: `target` sceglie
 un singolo target o `all`, `publish` decide se caricare in incoming/.
 
+### NDI (`libndi_newtek`)
+
+Il device NDI, rimosso da FFmpeg nel 2019, viene reinserito da `packaging/ffpatch/`
+(sorgenti da [moocowsheep/ffmpeg-ndi-patch](https://github.com/moocowsheep/ffmpeg-ndi-patch),
+modificati per caricare il runtime a run time); `scripts.d/50-libndi.sh` fornisce solo gli
+header dell'SDK NDI 6 (MIT). ffmpeg **non** dipende da libndi: il runtime serve solo quando
+si usa `-f libndi_newtek`, e va installato a parte (NDI Runtime / NDI Tools).
+
+Ricerca del runtime: `$NDI_RUNTIME_DIR_V6` (impostata dall'installer Windows), poi
+`$NDI_RUNTIME_DIR_V5`; Linux `libndi.so.6` → `libndi.so.5` → `libndi.so` (ld.so.cache,
+`LD_LIBRARY_PATH`); Windows `Processing.NDI.Lib.x64.dll` accanto a ffmpeg.exe o in System32.
+
+```
+ffmpeg -f libndi_newtek -find_sources 1 -i dummy
+ffmpeg -f libndi_newtek -i "HOST (Sorgente)" ...
+ffmpeg -re -i input.mp4 -pix_fmt uyvy422 -c:a pcm_s16le -f libndi_newtek "Nome uscita"
+```
+
 ## Secrets
 
 `SFTP_HOST`, `SFTP_PORT`, `SFTP_USER`, `SFTP_PASSWORD`, `SFTP_KNOWN_HOSTS`
