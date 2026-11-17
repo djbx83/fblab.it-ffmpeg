@@ -24,7 +24,9 @@ cmds=""
 while IFS= read -r f; do
     rel="${f#./}"
     dir="$(dirname "$rel")"
-    cmds+=" mkdir -p -f '$R/$dir'; put '$SRC/$rel' -o '$R/$rel.part'; mv '$R/$rel.part' '$R/$rel';"
+    # rm -f prima di mv: il rename SFTP (v3) fallisce se la destinazione esiste già
+    # (stesso nome già in incoming/, es. due run lo stesso giorno sullo stesso commit)
+    cmds+=" mkdir -p -f '$R/$dir'; put '$SRC/$rel' -o '$R/$rel.part'; rm -f '$R/$rel'; mv '$R/$rel.part' '$R/$rel';"
     echo "upload incoming/$rel"
 done < <(cd "$SRC" && find . -type f | sort)
 
