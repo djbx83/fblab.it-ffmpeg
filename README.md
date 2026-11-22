@@ -35,7 +35,9 @@ nonfree upstream non include; il workflow li copia in `ffbuilds/scripts.d/` prim
 generazione del Dockerfile. Attualmente: libcodec2, libgsm, libilbc, libshine, libspeex,
 liblc3, libvo-amrwbenc, libmodplug, libbs2b, libmysofa, libsvtjpegxs, libxevd, libxeve,
 libqrencode, libquirc, libklvanc, decklink (header Desktop Video SDK 12.0 da OBS Studio;
-il driver Blackmagic Desktop Video va installato sul client, caricato a run time).
+il driver Blackmagic Desktop Video va installato sul client, caricato a run time),
+libmpeghdec (MPEG-H 3D Audio, Fraunhofer). Inoltre `apply-overlay.sh` abilita
+libfdk-xhe-aac (encoder xHE-AAC), già compilata dallo stage fdk-aac di FFmpeg-Builds.
 
 Schedulato alle 02:37 UTC (tutti i target); a mano con *Run workflow*: `target` sceglie
 un singolo target o `all`, `publish` decide se caricare in incoming/.

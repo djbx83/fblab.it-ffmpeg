@@ -38,3 +38,14 @@ hook() {   # hook <regex-ancora> <riga-da-inserire>
 }
 hook '^mkdir ffbuild$'   'cp -r ffpatch ffbuild/ffpatch'
 hook '^    cd ffmpeg$'   '    bash /ffbuild/ffpatch/apply.sh'
+
+# xHE-AAC: lo stage 50-fdk-aac di FFmpeg-Builds compila e installa già libfdk-xhe-aac
+# (fdk-aac >= 3.0.0) ma non abilita l'encoder; aggiungiamo il flag allo stesso stage.
+FDK="$FFB/scripts.d/50-fdk-aac.sh"
+if ! grep -q -- '--enable-libfdk-xhe-aac' "$FDK"; then
+    [[ "$(grep -c -- '^    echo --enable-libfdk-aac$' "$FDK")" == 1 && "$(grep -c -- '^    echo --disable-libfdk-aac$' "$FDK")" == 1 ]] \
+        || { echo "::error::50-fdk-aac.sh: ancore echo --enable/--disable-libfdk-aac non trovate"; exit 1; }
+    sed -i -e 's/^    echo --enable-libfdk-aac$/&\n    echo --enable-libfdk-xhe-aac/' \
+           -e 's/^    echo --disable-libfdk-aac$/&\n    echo --disable-libfdk-xhe-aac/' "$FDK"
+    echo "50-fdk-aac.sh: aggiunto --enable-libfdk-xhe-aac"
+fi
