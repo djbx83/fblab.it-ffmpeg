@@ -34,7 +34,8 @@ in `incoming/` di packages.fblab.it; la pubblicazione la fa il repo `fblab.it-pa
 nonfree upstream non include; il workflow li copia in `ffbuilds/scripts.d/` prima della
 generazione del Dockerfile. Attualmente: libcodec2, libgsm, libilbc, libshine, libspeex,
 liblc3, libvo-amrwbenc, libmodplug, libbs2b, libmysofa, libsvtjpegxs, libxevd, libxeve,
-libqrencode, libquirc.
+libqrencode, libquirc, libklvanc, decklink (header Desktop Video SDK 12.0 da OBS Studio;
+il driver Blackmagic Desktop Video va installato sul client, caricato a run time).
 
 Schedulato alle 02:37 UTC (tutti i target); a mano con *Run workflow*: `target` sceglie
 un singolo target o `all`, `publish` decide se caricare in incoming/.
