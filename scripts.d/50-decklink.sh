@@ -43,10 +43,16 @@ ffbuild_dockerbuild() {
         command -v "$widl" || { echo "ERRORE: $widl non trovato nel toolchain"; return 1; }
         local idlinc="$PWD/mingw/mingw-w64-headers/include"
         [[ -f $idlinc/unknwn.idl ]] || { echo "ERRORE: unknwn.idl non trovato"; return 1; }
+        # wtypesbase.idl fa import "basetsd.h": widl di crosstool-ng non ha un percorso di
+        # include predefinito verso gli header C di mingw, lo ricaviamo dal compilatore
+        local sysinc
+        sysinc="$(dirname "$(echo '#include <basetsd.h>' | "${FFBUILD_CROSS_PREFIX}gcc" -E -H -x c - 2>&1 >/dev/null \
+                    | awk '/basetsd\.h$/ { print $2; exit }')")"
+        [[ -f $sysinc/basetsd.h ]] || { echo "ERRORE: basetsd.h non trovato (sysinc='$sysinc')"; return 1; }
 
         cd obs/plugins/decklink/win/decklink-sdk
-        "$widl" -I"$idlinc" -I. -h -o "$inc"/DeckLinkAPI.h DeckLinkAPI.idl
-        "$widl" -I"$idlinc" -I. -u -o "$inc"/DeckLinkAPI_i.c DeckLinkAPI.idl
+        "$widl" -I"$idlinc" -I"$sysinc" -I. -h -o "$inc"/DeckLinkAPI.h DeckLinkAPI.idl
+        "$widl" -I"$idlinc" -I"$sysinc" -I. -u -o "$inc"/DeckLinkAPI_i.c DeckLinkAPI.idl
         cp DeckLinkAPIVersion.h "$inc"/
         grep -q CLSID_CDeckLinkIterator "$inc"/DeckLinkAPI_i.c
     else
