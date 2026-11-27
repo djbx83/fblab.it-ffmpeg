@@ -44,6 +44,16 @@ ffbuild_dockerbuild() {
         drivers=( --disable-win32 --enable-ncurses )
     else
         drivers=( --enable-win32 --disable-ncurses )
+        # mingw-w64 con UCRT definisce sprintf_s/vsnprintf_s come inline (__mingw_ovr) in
+        # sec_api/stdio_s.h: il test di link di configure non le trova nella libreria, e
+        # libcaca ne compila una sua versione che va in conflitto con quella dell'header.
+        # Se l'header le dichiara, le segnaliamo come presenti.
+        local f
+        for f in sprintf_s vsnprintf_s; do
+            if echo '#include <stdio.h>' | "${FFBUILD_CROSS_PREFIX}gcc" $CPPFLAGS $CFLAGS -E -x c - | grep -qw "$f"; then
+                export ac_cv_func_$f=yes
+            fi
+        done
     fi
 
     ./bootstrap
